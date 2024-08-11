@@ -10,7 +10,7 @@ import (
 
 type TaskRepository interface {
 	AddTask(*models.Task) error
-	AddTasksFromTemplate(*models.Template) error
+	AddTasksFromTemplate(int) error
 	UpdateTask(*models.Task) error
 	DeleteTask(id int) error
 	GetTasks() ([]models.Task, error)
@@ -35,25 +35,36 @@ func (t *taskRepository) AddTask(task *models.Task) error {
 	return nil
 }
 
-func (t *taskRepository) AddTasksFromTemplate(tmpl *models.Template) error {
+func (t *taskRepository) AddTasksFromTemplate(templateID int) error {
 	ctx := context.Background()
-	tx, err := t.psqlClient.Db.Begin(ctx)
+	query := "SELECT * FROM template WHERE id = $1"
+	row := t.psqlClient.Db.QueryRow(ctx, query, templateID)
+
+	template := models.Template{}
+	if err := row.Scan(&template.ID, &template.Name); err != nil {
+		return err
+	}
+
+	query = "SELECT * FROM template_task WHERE template_id = $1"
+	rows, err := t.psqlClient.Db.Query(ctx, query, templateID)
 	if err != nil {
 		return err
 	}
 
-	defer tx.Rollback(ctx)
+	templateTasks := make([]models.TemplateTask, 0)
+	for rows.Next() {
+		task := models.TemplateTask{}
+		if err := rows.Scan(&task.ID, &task.TemplateID, &task.Description); err != nil {
+			return err
+		}
+		templateTasks = append(templateTasks, task)
+	}
 
-	query := "INSERT INTO task (description, done, date) values($1, $2, $3)"
-
-	for _, task := range tmpl.Tasks {
+	for _, task := range templateTasks {
+		query = "INSERT INTO task (description, done, date) values ($1, $2, $3)"
 		if _, err := t.psqlClient.Db.Exec(ctx, query, task.Description, false, time.Now().Unix()); err != nil {
 			return err
 		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return err
 	}
 
 	return nil
