@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"fmt"
 	"task-tracker/internal/db"
 	"task-tracker/internal/models"
 	"time"
@@ -16,10 +17,10 @@ type TaskRepository interface {
 }
 
 type taskRepository struct {
-	psqlClient db.PsqlClient
+	psqlClient *db.PsqlClient
 }
 
-func NewTaskRepository(dbcli db.PsqlClient) TaskRepository {
+func NewTaskRepository(dbcli *db.PsqlClient) TaskRepository {
 	return &taskRepository{
 		psqlClient: dbcli,
 	}
@@ -28,7 +29,7 @@ func NewTaskRepository(dbcli db.PsqlClient) TaskRepository {
 func (t *taskRepository) AddTask(task *models.Task) error {
 	query := "INSERT INTO task (description, done, date) values ($1, $2, $3)"
 	ctx := context.Background()
-	if _, err := t.psqlClient.Db.Exec(ctx, query, task.Description, false, time.Now()); err != nil {
+	if _, err := t.psqlClient.Db.Exec(ctx, query, task.Description, false, time.Now().Unix()); err != nil {
 		return err
 	}
 	return nil
@@ -43,7 +44,7 @@ func (t *taskRepository) AddTasksFromTemplate(tmpl *models.Template) error {
 
 	defer tx.Rollback(ctx)
 
-	query := "INSERT INTO task (description, done, date) values($1, $2, $3, $4)"
+	query := "INSERT INTO task (description, done, date) values($1, $2, $3)"
 
 	for _, task := range tmpl.Tasks {
 		if _, err := t.psqlClient.Db.Exec(ctx, query, task.Description, false, time.Now().Unix()); err != nil {
@@ -61,9 +62,16 @@ func (t *taskRepository) AddTasksFromTemplate(tmpl *models.Template) error {
 func (t *taskRepository) UpdateTask(task *models.Task) error {
 	query := "UPDATE task SET description = $1, done = $2 WHERE id = $3"
 	ctx := context.Background()
-	if _, err := t.psqlClient.Db.Exec(ctx, query, task.Description, task.Done, task.ID); err != nil {
+	result, err := t.psqlClient.Db.Exec(ctx, query, task.Description, task.Done, task.ID)
+	if err != nil {
 		return err
 	}
+
+	rowsAffected := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("no rows were updated, task ID might be incorrect: %d", task.ID)
+	}
+
 	return nil
 }
 

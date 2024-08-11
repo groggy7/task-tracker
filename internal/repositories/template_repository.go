@@ -13,10 +13,10 @@ type TemplateRepository interface {
 }
 
 type templateRepository struct {
-	psqlClient db.PsqlClient
+	psqlClient *db.PsqlClient
 }
 
-func NewTemplateRepository(dbcli db.PsqlClient) TemplateRepository {
+func NewTemplateRepository(dbcli *db.PsqlClient) TemplateRepository {
 	return &templateRepository{
 		psqlClient: dbcli,
 	}
@@ -60,16 +60,28 @@ func (t *templateRepository) UpdateTemplate(tmpl *models.Template) error {
 
 	defer tx.Rollback(ctx)
 
-	query := "UPDATE template SET name = $1"
-	if _, err := tx.Exec(ctx, query, tmpl.Name); err != nil {
+	query := "UPDATE template SET name = $1 WHERE id = $2"
+	if _, err := tx.Exec(ctx, query, tmpl.Name, tmpl.ID); err != nil {
 		return err
 	}
 
 	for _, task := range tmpl.Tasks {
-		query := "UPDATE template_task SET description = $1"
-		if _, err := tx.Exec(ctx, query, task.Description); err != nil {
+		query := "UPDATE template_task SET description = $1 WHERE id = $2 AND template_id = $3"
+		result, err := tx.Exec(ctx, query, task.Description, task.ID, task.TemplateID)
+		if err != nil {
 			return err
 		}
+
+		if rowsAffected := result.RowsAffected(); rowsAffected == 0 {
+			query := "INSERT INTO template_task (template_id, description) VALUES ($1, $2)"
+			if _, err := tx.Exec(ctx, query, task.TemplateID, task.Description); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
 	}
 
 	return nil
@@ -77,7 +89,7 @@ func (t *templateRepository) UpdateTemplate(tmpl *models.Template) error {
 
 func (t *templateRepository) GetTemplates() ([]models.Template, error) {
 	ctx := context.Background()
-	query := "SELECT * FROM template"
+	query := "SELECT id, name FROM template"
 	rows, err := t.psqlClient.Db.Query(ctx, query)
 	if err != nil {
 		return nil, err
@@ -90,7 +102,7 @@ func (t *templateRepository) GetTemplates() ([]models.Template, error) {
 			return nil, err
 		}
 
-		query = "SELECT * FROM task_template WHERE template_id = $1"
+		query = "SELECT id, template_id, description FROM template_task WHERE template_id = $1"
 		task_rows, err := t.psqlClient.Db.Query(ctx, query, template.ID)
 		if err != nil {
 			return nil, err
