@@ -9,6 +9,7 @@ import (
 type TemplateRepository interface {
 	AddTemplate(tmpl *models.Template) error
 	UpdateTemplate(tmpl *models.Template) error
+	DeleteTemplate(int) error
 	GetTemplates() ([]models.Template, error)
 }
 
@@ -87,6 +88,31 @@ func (t *templateRepository) UpdateTemplate(tmpl *models.Template) error {
 	return nil
 }
 
+func (t *templateRepository) DeleteTemplate(id int) error {
+	ctx := context.Background()
+	tx, err := t.psqlClient.Db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback(ctx)
+
+	query := "DELETE FROM template_task WHERE template_id = $1"
+	if _, err := tx.Exec(ctx, query, id); err != nil {
+		return err
+	}
+
+	query = "DELETE FROM template WHERE id = $1"
+	if _, err := tx.Exec(ctx, query, id); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	return nil
+}
 func (t *templateRepository) GetTemplates() ([]models.Template, error) {
 	ctx := context.Background()
 	query := "SELECT id, name FROM template"
