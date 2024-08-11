@@ -40,7 +40,7 @@ func (t *templateRepository) AddTemplate(tmpl *models.Template) error {
 
 	for _, task := range tmpl.Tasks {
 		query := "INSERT INTO template_task (template_id, description) values($1, $2)"
-		if _, err := tx.Exec(ctx, query, task.TemplateID, task.Description); err != nil {
+		if _, err := tx.Exec(ctx, query, templateID, task.Description); err != nil {
 			return err
 		}
 	}
@@ -113,6 +113,7 @@ func (t *templateRepository) DeleteTemplate(id int) error {
 
 	return nil
 }
+
 func (t *templateRepository) GetTemplates() ([]models.Template, error) {
 	ctx := context.Background()
 	query := "SELECT id, name FROM template"

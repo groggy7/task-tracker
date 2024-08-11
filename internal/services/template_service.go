@@ -17,7 +17,7 @@ type templateService struct {
 	repo repositories.TemplateRepository
 }
 
-func NewTemplateRepository(repo repositories.TemplateRepository) TemplateService {
+func NewTemplateService(repo repositories.TemplateRepository) TemplateService {
 	return &templateService{
 		repo: repo,
 	}
@@ -28,7 +28,6 @@ func (t *templateService) AddTemplate(req *dto.AddTmplReq) error {
 
 	for i, task := range req.Tasks {
 		tasks[i] = models.TemplateTask{
-			TemplateID:  task.TemplateID,
 			Description: task.Description,
 		}
 	}
@@ -46,12 +45,14 @@ func (t *templateService) UpdateTemplate(req *dto.UpdateTmplReq) error {
 
 	for i, task := range req.Tasks {
 		tasks[i] = models.TemplateTask{
+			ID:          task.ID,
 			TemplateID:  task.TemplateID,
 			Description: task.Description,
 		}
 	}
 
 	template := &models.Template{
+		ID:    req.ID,
 		Name:  req.Name,
 		Tasks: tasks,
 	}
